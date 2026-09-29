@@ -68,41 +68,79 @@ export default function UploadScreen({
     setIsDragging(false);
   };
 
-  const runAnalysis = async (fileToUpload, useDemo = false) => {
+  const runAnalysis = async (fileToUpload) => {
+    if (!fileToUpload) return;
     setIsAnalyzing(true);
     setAnalysisStep(0);
 
-    // Realistic progressive loading step intervals
     const interval = setInterval(() => {
       setAnalysisStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
-    }, 700);
+    }, 600);
 
     try {
-      const data = await analyzeTenderUpload(fileToUpload, useDemo);
+      console.log('[BidGuard] Analyzing uploaded tender file:', fileToUpload.name);
+      const data = await analyzeTenderUpload(fileToUpload, false);
+      
+      if (!data || !data.tender_overview) {
+        throw new Error('Analysis response is incomplete or invalid.');
+      }
+
       clearInterval(interval);
       setAnalysisStep(steps.length - 1);
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        onAnalysisComplete(data);
-        onShowToast({ type: 'success', message: 'Tender analysis completed with evidence citations!' });
-        setActiveScreen('analysis');
-      }, 500);
-    } catch (err) {
+
+      await new Promise((r) => setTimeout(r, 350));
+
+      onAnalysisComplete(data);
+      onShowToast({ type: 'success', message: 'Tender analysis completed with evidence citations!' });
+      setActiveScreen('analysis');
+    } catch (error) {
       clearInterval(interval);
-      console.warn('API error, falling back to demo tender data:', err);
-      // Fallback to demo tender
-      const demoData = await loadDemoTender();
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        onAnalysisComplete(demoData);
-        onShowToast({ type: 'info', message: 'Loaded official GeM benchmark tender analysis.' });
-        setActiveScreen('analysis');
-      }, 500);
+      console.error('[BidGuard] Upload Analysis Error:', error);
+      onShowToast({
+        type: 'error',
+        message: `Analysis failed: ${error.message || 'Server error occurred while analyzing PDF.'}`
+      });
+    } finally {
+      clearInterval(interval);
+      setIsAnalyzing(false);
     }
   };
 
-  const handleUseDemoTender = () => {
-    runAnalysis(null, true);
+  const handleUseDemoTender = async () => {
+    setIsAnalyzing(true);
+    setAnalysisStep(0);
+
+    const interval = setInterval(() => {
+      setAnalysisStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
+    }, 450);
+
+    try {
+      console.log('[BidGuard] Requesting Demo Tender directly via GET /api/tender/demo');
+      const demoData = await loadDemoTender();
+
+      if (!demoData || !demoData.tender_overview || !demoData.requirements) {
+        throw new Error('Received incomplete demo tender structure from server.');
+      }
+
+      clearInterval(interval);
+      setAnalysisStep(steps.length - 1);
+
+      await new Promise((r) => setTimeout(r, 350));
+
+      onAnalysisComplete(demoData);
+      onShowToast({ type: 'success', message: 'Demo GeM tender loaded successfully!' });
+      setActiveScreen('analysis');
+    } catch (error) {
+      clearInterval(interval);
+      console.error('[BidGuard] Demo Tender Error:', error);
+      onShowToast({
+        type: 'error',
+        message: `Failed to load demo tender: ${error.message || 'Please check your connection and retry.'}`
+      });
+    } finally {
+      clearInterval(interval);
+      setIsAnalyzing(false);
+    }
   };
 
   return (

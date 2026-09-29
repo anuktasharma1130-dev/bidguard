@@ -84,9 +84,13 @@ export default function App() {
           setActiveTender(demo);
         }
       } catch (err) {
-        console.warn('Could not load current tender, using fallback demo:', err);
-        const demo = await loadDemoTender();
-        setActiveTender(demo);
+        console.warn('Could not load current tender, attempting demo tender fallback:', err);
+        try {
+          const demo = await loadDemoTender();
+          setActiveTender(demo);
+        } catch (demoErr) {
+          console.warn('Could not load demo tender on initial boot:', demoErr);
+        }
       }
     }
 
@@ -99,7 +103,8 @@ export default function App() {
       setActiveTender(demo);
       showToast({ type: 'success', message: 'Demo GeM tender loaded successfully.' });
     } catch (err) {
-      showToast({ type: 'info', message: 'Loaded local demo benchmark tender.' });
+      console.error('[BidGuard] handleResetDemo error:', err);
+      showToast({ type: 'error', message: `Could not reset demo tender: ${err.message || 'Network error'}` });
     }
   };
 
